@@ -121,6 +121,21 @@ There is **no doctor login**. `doctor.jsp` is an operational page reachable by a
 
 See §2.3. Also: no DELETE endpoints (the DB user has only `SELECT, INSERT, UPDATE`), no pagination, no search beyond specialty/date filters, no i18n, no accessibility audit.
 
+### 4.3 Deliberate simplifications
+
+The team builds **only what the brief asks for**. The following are explicitly not built, even though they are common practice:
+
+| Not built | Rationale |
+|---|---|
+| Shared Python package / helper modules (`db.py`, `errors.py`, `client.py`) | The brief specifies `app.py`, `config.py`, `requirements.txt` per service |
+| Service template folder | Same reason — each service is three files |
+| Mock/stub server | Not required; integration happens as services land |
+| Contract files, CODEOWNERS, PR templates, issue labels | Not graded — commit history is the only required evidence |
+| Docker, CI, unit-test suite | Not required; Postman plus manual E2E is the specified testing approach |
+| Pagination, caching, retries | Not required; one clinic, demo-scale data |
+
+Anything not on this list but not in §4.1 should be assumed out of scope.
+
 ---
 
 ## 5. Architecture
@@ -360,18 +375,23 @@ Call `conn.commit()` after **every** `INSERT`/`UPDATE`. Close cursors and connec
 
 - `{"service": "doctor", "status": "UP"}`.
 
-### FR-DOC-08 Shared service scaffolding (O2 also owns this for everyone)
+### FR-DOC-08 Service layout and conventions (applies to every service)
 
-Because Doctor is built first, O2 produces the templates every other service copies, so five people do not each invent a different structure:
+Each service is **exactly three files**, as the brief requires. No shared packages, no helper modules, no extra tooling:
 
-- `config.py` with `T` and derived values (Appendix A).
-- `db.py` helper: connection factory, `query_one`, `query_all`, `execute`, and Decimal/date/time conversion helpers.
-- `errors.py`: `ApiError(code, message, status)` + Flask error handlers producing the §8.2 envelope and catching `Exception` → `500`/`503` JSON.
-- A `service_client.py` wrapper around `requests` with `timeout=3` that converts failures to `SERVICE_UNAVAILABLE`.
-- `/health` route pattern.
-- `requirements.txt` pinned to `flask`, `mysql-connector-python`, `requests`, `werkzeug`.
+```
+services/<name>/
+  app.py             Flask app: routes, /health, errors
+  config.py          T, derived parameters, DB settings, port, peer URLs
+  requirements.txt   flask, mysql-connector-python, requests, werkzeug
+```
 
-**Decision must be made by end of Phase 1 week 1 and announced in the team channel.** Later services must not fork these files' interfaces.
+- `config.py` is the **only** place where `T` and the derived values appear (Appendix A).
+- `app.py` defines its own `/health` route and one small `error()` helper that produces the §8.2 envelope — five lines inline, not a shared module.
+- Outbound calls use `requests` with `timeout=3` written inline where the call happens.
+- Nothing else is added to a service folder: no `db.py`, no `errors.py`, no `client.py`.
+
+**Project structure is created once by O1** (team leader) for all five services in Phase 1, as `/health`-only stubs. Each owner then fills in only their own `app.py`.
 
 ---
 
@@ -799,16 +819,16 @@ See §15.2. Order is reserve-new → release-old → update → notify.
 
 ### 18.1 Primary ownership (as chosen: one owner per service + one for the JSP app)
 
-| Role | Member | Primary component | Graded items owned | Side duties (to equalise load) |
+| Role | Member | Primary component | Graded items owned | Side duties |
 |---|---|---|---|---|
-| **O1** | `<name>` | Appointment Service (5001) | Book 12, cancel+complete 4, compensation+503 5, F2 endpoint, F1 query endpoint | *None* — heaviest role |
-| **O2** | `<name>` | Doctor & Schedule (5002) | Doctor 6, DB schema+data 3 | Shared service scaffolding (`config.py`, `db.py`, `errors.py`, `service_client.py`); F1 query endpoint in P3 |
-| **O3** | `<name>` | Billing (5003) | Billing 11 | Money test vectors + invoice regression checks |
-| **O4** | `<name>` | Patient (5004) | Patient 6 | README, demo script, submission packaging |
-| **O5** | `<name>` | Notification (5005) | Notification 9 | Postman collection owner; failure-injection matrix |
-| **O6** | `<name>` | JSP web app (8080) | JSP 3+5+4, F1/F2 pages | Repo skeleton; release manager (zips, Classroom submissions) |
+| **O1** | Ziad *(leader)* | Appointment Service (5001) | Book 12, cancel+complete 4, compensation+503 5, F2 endpoint, F1 query endpoint | Project structure: folders + `config.py`/`app.py` skeletons for all six units |
+| **O2** | `<name>` | Doctor & Schedule (5002) | Doctor 6, DB schema+data 3 | `database/schema.sql`, `sample_data.sql`, DB user |
+| **O3** | `<name>` | Billing (5003) | Billing 11 | Money test vectors |
+| **O4** | `<name>` | Patient (5004) | Patient 6 | README updates, demo script, submission zip |
+| **O5** | `<name>` | Notification (5005) | Notification 9 | Postman collection owner, 503 failure matrix |
+| **O6** | `<name>` | JSP web app (8080) | JSP 3+5+4, F1/F2 pages | `webapp/` setup, releases |
 
-**Why this is fair:** O1 and O6 carry the two heaviest builds and get **no** side duties. O2 and O4 carry the lightest builds and absorb DB/scaffolding and README/submission. O3 and O5 sit in the middle with targeted extras. Marks are near-even: 21 / 9+shared / 11 / 6+shared / 9 / 12.
+**Why this is fair:** O1 and O6 carry the two heaviest builds; O1's extra duty is a one-off 45-minute skeleton, O6's is its own project setup. O2 carries the lightest service but owns the whole database, which is a hard dependency for everyone. O3 and O5 sit in the middle with targeted extras.
 
 ### 18.2 Shadow pairs (protects the 20-mark individual discussion)
 
@@ -824,9 +844,9 @@ Shadow duties: write the partner's Postman requests, review their PRs, and be ab
 
 | Artifact | Accountable | Contributors |
 |---|---|---|
-| `database/schema.sql`, `sample_data.sql` | O2 | O3 (plans), O4 (patients via API) |
-| `config.py` template + `db.py` + `errors.py` | O2 | all (adopt, do not fork) |
-| `config.properties` + HTTP client wrapper | O6 | all (adopt) |
+| Project structure (folders, service stubs, `config.py`, `requirements.txt`) | O1 | — |
+| `database/schema.sql`, `sample_data.sql`, DB user | O2 | O3 (plans seed), O4 (patients created via API) |
+| `config.properties` + HttpClient usage in the web app | O6 | — |
 | Postman collection | O5 | all (one folder each) |
 | README (members, ownership, run steps) | O4 | all (own section) |
 | Integration test pass + 503 matrix | O5 | O1, O6 |
@@ -836,11 +856,10 @@ Shadow duties: write the partner's Postman requests, review their PRs, and be ab
 ### 18.4 Working agreements
 
 1. **One file, one owner per phase.** No two people edit the same `app.py` in the same week.
-2. **One GitHub issue per endpoint**, closed by the commit that implements it. This is the fairness evidence the grader looks for.
-3. **Buddy review** on every PR (10 minutes, not a ceremony).
-4. **Commit message convention:** `feat(doctor): FR-DOC-05 atomic reserve`. Reference the FR ID — it makes the traceability table self-maintaining.
-5. **Weekly 20-minute sync** at each phase boundary: what is blocked, who is over 1.5× the median hours, what moves.
-6. **`main` always runs.** Merge only when `/health` is green on all five services.
+2. **Everyone commits their own work.** The brief states that a member with no commits is questioned in the discussion.
+3. **Commit messages name the part:** `feat(doctor): atomic reserve`. Keeps the history readable at a glance.
+4. **`main` always runs.** Merge only when `/health` is green on all five services.
+5. **Phase-boundary check-in:** confirm each phase's gate checklist (§19) is met before the Classroom submission.
 
 ---
 
@@ -862,12 +881,12 @@ Shadow duties: write the partner's Postman requests, review their PRs, and be ab
 
 | Owner | Tasks | Exit criteria |
 |---|---|---|
-| O1 | Appointment skeleton, `config.py`, `/health`; write the book-flow contract + Postman stubs for §16.1 | `/health` UP; contract agreed by O3/O5 |
-| O2 | `schema.sql`, `sample_data.sql`, limited DB user; **all** FR-DOC; shared scaffolding templates | All FR-DOC pass in Postman incl. `409`/`404`; concurrent reserve test passes; 20 slots seeded |
+| O1 | **Project structure for all six units** (folders, `config.py` with `T`, `/health`-only `app.py`, `requirements.txt`, `webapp/`, `postman/`); then FR-APT body validation + book-flow contract for §16.1 | All five `/health` respond; contract agreed by O3/O5 |
+| O2 | `schema.sql`, `sample_data.sql`, limited DB user; **all** FR-DOC | All FR-DOC pass in Postman incl. `409`/`404`; concurrent reserve test passes; 20 slots seeded |
 | O3 | `insurance_plans` seed rows; FR-BIL-01 | `GOLD` and `BASIC` return 200, unknown → 404 |
 | O4 | FR-PAT-01…03, FR-PAT-06 | 3 patients created via API; duplicate email → 409; hash stored |
-| O5 | Notification skeleton, `config.py`, `/health`; message templates using `T` | `/health` UP; template strings reviewed by O6 |
-| O6 | Repo skeleton, `config.properties`, HttpClient wrapper; FR-WEB-01…04 | Register → login → doctors → slots works in the browser |
+| O5 | Notification skeleton (`/health`, `config.py`); message templates using `T` | `/health` UP; template strings reviewed by O6 |
+| O6 | `webapp/` project setup, `config.properties`, HttpClient usage; FR-WEB-01…04 | Register → login → doctors → slots works in the browser |
 
 **Gate — do not submit until all true:**
 - [ ] Every Phase 1 endpoint answers correctly in Postman, **including its error cases**.
@@ -1019,7 +1038,7 @@ medibook-T/
 | `T` not assigned by 26 Nov | Wrong parameters everywhere | Build with `T = 0`; single constant per unit; change once |
 | Two people editing one `app.py` | Conflicts, lost work | One owner per file per phase; shadows only review |
 | Non-atomic reserve | Double booking, lost 6 marks | Single `UPDATE … WHERE status='AVAILABLE'` + `rowcount`; concurrency test |
-| Decimal/timedelta not converted | `jsonify` crashes → 500 | Use the shared `db.py` converters |
+| Decimal/timedelta not converted | `jsonify` crashes → 500 | Convert in the route before returning (§8.7) |
 | Cross-service FK temptation | Zero marks for the endpoint | IDs only; verify via API |
 | Notification called before commit | Callback 404 during booking | Commit appointment before step 7 |
 | Patient↔Appointment recursion | Infinite loop / timeout | Appointment never calls Patient `/appointments` |
