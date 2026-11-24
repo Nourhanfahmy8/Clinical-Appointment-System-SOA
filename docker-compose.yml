@@ -1,0 +1,118 @@
+name: medibook
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      # MYSQL_DATABASE is intentionally not set: schema.sql creates the
+      # database itself, and setting it here makes that statement fail.
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/sample_data.sql:/docker-entrypoint-initdb.d/02-sample_data.sql:ro
+      - ./docker/initdb/03-grant.sql:/docker-entrypoint-initdb.d/03-grant.sql:ro
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  appointment:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: appointment
+    environment:
+      SERVICE_HOST: 0.0.0.0
+      DB_HOST: db
+      PATIENT_URL: http://patient:5004
+      DOCTOR_URL: http://doctor:5002
+      BILLING_URL: http://billing:5003
+      NOTIFICATION_URL: http://notification:5005
+    ports:
+      - "5001:5001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  doctor:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: doctor
+    environment:
+      SERVICE_HOST: 0.0.0.0
+      DB_HOST: db
+    ports:
+      - "5002:5002"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  billing:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: billing
+    environment:
+      SERVICE_HOST: 0.0.0.0
+      DB_HOST: db
+      DOCTOR_URL: http://doctor:5002
+      PATIENT_URL: http://patient:5004
+    ports:
+      - "5003:5003"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  patient:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: patient
+    environment:
+      SERVICE_HOST: 0.0.0.0
+      DB_HOST: db
+      BILLING_URL: http://billing:5003
+      APPOINTMENT_URL: http://appointment:5001
+    ports:
+      - "5004:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  notification:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: notification
+    environment:
+      SERVICE_HOST: 0.0.0.0
+      DB_HOST: db
+      APPOINTMENT_URL: http://appointment:5001
+      PATIENT_URL: http://patient:5004
+      DOCTOR_URL: http://doctor:5002
+      BILLING_URL: http://billing:5003
+    ports:
+      - "5005:5005"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Web app: enable once O6 has the JSP project (needs a pom.xml / WAR build).
+  # webapp:
+  #   build:
+  #     context: ./webapp
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - appointment
+  #     - doctor
+  #     - billing
+  #     - patient
+
+volumes:
+  dbdata:

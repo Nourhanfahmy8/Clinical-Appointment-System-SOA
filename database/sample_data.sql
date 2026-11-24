@@ -1,0 +1,8 @@
+-- O2: replace this file with the sample data from the brief (section 4).
+--
+-- It is a placeholder so `docker compose up` can start MySQL before the real
+-- seed data lands. Comment-only, so MySQL treats it as a no-op.
+--
+-- When you fill it in, start with:  USE clinic_system;
+-- Each file in docker-entrypoint-initdb.d runs in its own session, so the
+-- USE from schema.sql does not carry over.

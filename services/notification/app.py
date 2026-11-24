@@ -42,4 +42,5 @@ def handle_unexpected(exc):
 
 
 if __name__ == "__main__":
-    app.run(host="localhost", port=config.SERVICE_PORT)
+    # 127.0.0.1 locally; Docker sets SERVICE_HOST=0.0.0.0 so the port is reachable.
+    app.run(host=config.SERVICE_HOST, port=config.SERVICE_PORT)

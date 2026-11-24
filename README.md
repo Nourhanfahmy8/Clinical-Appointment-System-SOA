@@ -63,10 +63,14 @@ Each service folder contains exactly three files: `app.py`, `config.py`, `requir
 ```
 medibook-T/
 ├── README.md
+├── Dockerfile                  one image for all five services
+├── docker-compose.yml          MySQL + the five services
 ├── docs/PRD.md
 ├── database/
 │   ├── schema.sql
 │   └── sample_data.sql
+├── docker/
+│   └── initdb/03-grant.sql     Docker-only DB user grant
 ├── services/
 │   ├── appointment/
 │   ├── doctor/
@@ -139,6 +143,31 @@ Open `webapp/` in NetBeans/IntelliJ/Eclipse, deploy to Tomcat 10.x, browse to
 
 Import `postman/medibook-T.postman_collection.json` and set `base_appointment`, `base_doctor`,
 `base_billing`, `base_patient`, `base_notification`.
+
+### 5. Docker (optional)
+
+The manual steps above are the primary way to run the project. Docker is a convenience that
+starts MySQL and all five services with one command:
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs -f appointment
+```
+
+Services listen on the same ports (5001–5005), so Postman and the web app work unchanged.
+Reset the database with `docker compose down -v`.
+
+How it fits together:
+
+- `Dockerfile` is one image definition for all five services; compose passes `SERVICE_DIR`.
+- `config.py` reads `DB_HOST`, `SERVICE_HOST` and the peer URLs from environment variables.
+  The defaults are the local values, so `python app.py` still works without Docker.
+- `docker/initdb/03-grant.sql` adds `clinic_user@'%'`, because a container connects from a
+  different host than `localhost`. Privileges are unchanged: `SELECT, INSERT, UPDATE`.
+- MySQL runs `schema.sql`, then `sample_data.sql`, then the grant. Those first two are
+  placeholders until O2 fills them in.
+- The web app is not in the compose file yet; it needs the JSP project from O6.
 
 ---
 

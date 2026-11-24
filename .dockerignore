@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gitattributes
+docs
+README.md
+database
+postman
+webapp
+docker
+**/__pycache__
+**/*.pyc
+*.zip
+*.swp
